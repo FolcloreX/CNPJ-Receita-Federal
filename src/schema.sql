@@ -12,7 +12,8 @@ DROP TABLE IF EXISTS municipios CASCADE;
 DROP TABLE IF EXISTS paises CASCADE;
 
 -- ============================================================================
--- 2. TABELAS DE DOMÍNIO (UNLOGGED para carga rápida) SEM PK SEM FK 
+-- 2. TABELAS DE DOMÍNIO (UNLOGGED para carga rápida) SEM PK SEM FK
+-- Se use_unlogged=False, o loader altera para LOGGED logo após criação.
 -- ============================================================================
 
 CREATE UNLOGGED TABLE paises (
@@ -38,7 +39,6 @@ CREATE UNLOGGED TABLE naturezas_juridicas (
 CREATE UNLOGGED TABLE cnaes (
     codigo INTEGER, -- 7 dígitos (ex: 4711302), precisa ser INTEGER
     nome VARCHAR(500) -- Algumas descrições são longas
-  
 );
 
 -- ============================================================================

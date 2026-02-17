@@ -1,7 +1,8 @@
 import zipfile
+import shutil
 import os
 from pathlib import Path
-from itertools import groupby
+from itertools import groupby, takewhile
 from typing import List, Iterator, Tuple
 import logging
 from .settings import settings
@@ -15,7 +16,7 @@ def get_file_base_name(path: Path) -> str:
     Extrai o nome base de um arquivo, removendo números e a extensão.
     Exemplo: "Empresas4.zip" -> "Empresas"
     """
-    base = "".join(__import__("itertools").takewhile(str.isalpha, path.stem))
+    base = "".join(takewhile(str.isalpha, path.stem))
     return base or "desconhecido"
 
 
@@ -38,9 +39,9 @@ def create_directory_if_not_exists(directory: Path):
     """
     try:
         directory.mkdir(parents=True, exist_ok=True)
-        logging.info(f"✔️ Diretório '{directory}' garantido.")
+        logger.info(f"✔️ Diretório '{directory}' garantido.")
     except OSError as e:
-        logging.error(f"❌ Erro ao criar o diretório '{directory}': {e}")
+        logger.error(f"❌ Erro ao criar o diretório '{directory}': {e}")
         raise
 
 
@@ -49,14 +50,14 @@ def extract_single_zip(zip_path: Path, destination_dir: Path):
     Extrai um único arquivo .zip para um diretório de destino.
     Isola a operação de extração e lida com erros específicos.
     """
-    logging.info(f"   -> Extraindo '{zip_path.name}'...")
+    logger.info(f"   -> Extraindo '{zip_path.name}'...")
 
     try:
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             for member in zip_ref.infolist():
                 member_path = Path(member.filename)
                 if member_path.is_absolute():
-                    logging.warning(f"~ Ignorando entrada absoluta: {member.filename}")
+                    logger.warning(f"~ Ignorando entrada absoluta: {member.filename}")
                     continue
 
                 target_path = (destination_dir / member_path).resolve()
@@ -65,12 +66,12 @@ def extract_single_zip(zip_path: Path, destination_dir: Path):
                     base_str = str(base_dir)
                     target_str = str(target_path)
                     if os.path.commonpath([base_str, target_str]) != base_str:
-                        logging.warning(
+                        logger.warning(
                             f"~ Ignorando entrada potencialmente maliciosa: {member.filename}"
                         )
                         continue
                 except Exception:
-                    logging.warning(
+                    logger.warning(
                         f"   ~ Ignorando entrada inválida: {member.filename}"
                     )
                     continue
@@ -83,16 +84,18 @@ def extract_single_zip(zip_path: Path, destination_dir: Path):
                         zip_ref.open(member, "r") as src,
                         open(target_path, "wb") as dst,
                     ):
-                        dst.write(src.read())
+                        shutil.copyfileobj(src, dst)
 
     except zipfile.BadZipFile:
-        logging.error(
+        logger.error(
             f"⚠️ AVISO: O arquivo '{zip_path.name}' está corrompido "
             "ou não é um ZIP válido. Pulando."
         )
+        raise
 
     except Exception as e:
-        logging.error(f"   ❌ Erro inesperado ao extrair '{zip_path.name}': {e}")
+        logger.error(f"   ❌ Erro inesperado ao extrair '{zip_path.name}': {e}")
+        raise
 
 
 # --- Função Principal (Orquestrador) ---
@@ -107,12 +110,11 @@ def run_extraction():
     extracted_dir = settings.extracted_dir
 
     if not compressed_dir.is_dir():
-        logging.error(
-            f"❌ Erro: O diretório de origem '{compressed_dir}' não foi encontrado."
+        raise FileNotFoundError(
+            f"O diretório de origem '{compressed_dir}' não foi encontrado."
         )
-        return
 
-    logging.info(
+    logger.info(
         f"Iniciando processo de descompactação...\n"
         f"Origem: '{compressed_dir}'\n"
         f"Destino: '{extracted_dir}'\n"
@@ -122,8 +124,7 @@ def run_extraction():
     zip_files = list(compressed_dir.glob("*.zip"))
 
     if not zip_files:
-        logging.error("🟡 Nenhum arquivo .zip encontrado no diretório de origem.")
-        return
+        raise FileNotFoundError("Nenhum arquivo .zip encontrado no diretório de origem.")
 
     # 3. Lógica pura para agrupar os arquivos.
     file_groups = group_files(zip_files)
@@ -133,7 +134,7 @@ def run_extraction():
         target_subdir_name = base_name.lower()
         target_path = extracted_dir / target_subdir_name
 
-        logging.info(f"\n📂 Processando grupo: '{base_name}'")
+        logger.info(f"\n📂 Processando grupo: '{base_name}'")
 
         create_directory_if_not_exists(target_path)
 
@@ -143,10 +144,10 @@ def run_extraction():
                 executor.submit(extract_single_zip, fp, target_path)
                 for fp in files_list
             ]
-            for _ in as_completed(futures):
-                pass
+            for future in as_completed(futures):
+                future.result()
 
-    logging.info("\n✅ Processo de descompactação concluído com sucesso!")
+    logger.info("\n✅ Processo de descompactação concluído com sucesso!")
 
 
 if __name__ == "__main__":
