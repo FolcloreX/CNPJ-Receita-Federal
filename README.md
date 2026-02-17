@@ -6,7 +6,13 @@ Este projeto é uma ferramenta de `ETL` (Extract, Transform, Load) de alto desem
 
 O foco principal é **performance**, utilizando técnicas como `COPY FROM STDIN`, tabelas `UNLOGGED` e tratamento de dados em _chunks_ via Pandas.
 
-As vezes há **Problemas de integridade**, como é o caso da versão `2025-11`. Que faltou o código de país `150`. Ou caso tenha algum problema de faltar chaves estrangeiras como um sócio que não consta. Não há problemas os dados já estão inseridos. Caso aconteça, basta corrigir o problema no banco de dados e executar `constraints.sql`. Para definir as constraints e ter um banco de dados integro.
+# Integridade dos Dados e Inconsistências na Origem
+
+É comum que a base de dados da Receita Federal apresente inconsistências de integridade referencial (ex: um sócio referenciado que não consta na tabela de sócios).
+
+O Pipeline trata esses casos automaticamente: todas as constraints e chaves estrangeiras são validadas após a inserção para que seja aplicada as constraints e não de erro no processo. Quando um registro pai não é encontrado, o sistema insere um dado fictício (dummy) identificado como "NÃO CONSTA NA ORIGEM". Portanto, não se preocupe: os dados já estão higienizados e inseridos, você não terá erro algum.
+
+Para aplicar as restrições formalmente no banco de dados **CASO SEJA NECESSÀRIO**, execute o arquivo constraints.sql. Basta corrigir o dado pontual e executá-lo novamente, sem a necessidade de reiniciar todo o processo de inserção.
 
 O script é **totalmente modular**, caso falhe em alguma etapa basta corrigir o problema e executar o módulo de onde parou.
 
@@ -48,6 +54,8 @@ Utiliza o comando `COPY` do PostgreSQL (via driver `psycopg`) para inserção em
 
 Cria tabelas como `UNLOGGED` para acelerar a escrita inicial.
 Realiza a limpeza de dados (conversão de datas, formatação de arrays para `CNAEs`, sanitização de decimais etc...)
+
+Validação das constraints para que não tenha haja erros de integridade.
 
 Aplicação de Chaves Primárias, Estrangeiras e Índices **após** a carga para maximizar a velocidade.
 
