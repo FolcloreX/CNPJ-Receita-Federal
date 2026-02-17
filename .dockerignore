@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.idea
+.vscode
+.mypy_cache
+.pytest_cache
+__pycache__
+*.pyc
+data/
+logs/
+docs/
+tests/
+*.md
+poetry.lock

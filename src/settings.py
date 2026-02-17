@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from typing import Literal, Dict, Optional
 from enum import Enum
@@ -15,7 +16,7 @@ def setup_logging():
         format="%(levelname)s - %(asctime)s - [%(name)s] - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         handlers=[
-            logging.FileHandler(log_file, mode="w"),
+            logging.FileHandler(log_file, mode="a"),
             logging.StreamHandler(),
         ],
     )
@@ -54,7 +55,7 @@ class Settings(BaseSettings):
 
     rfb_token: str = Field(
         default="YggdBLfdninEJX9",
-        description="teste"
+        description="Token público de acesso ao WebDAV da Receita Federal (Nextcloud).",
     )
 
     target_date: str = Field(
@@ -211,8 +212,8 @@ class Settings(BaseSettings):
         if self.db_engine != "postgresql":
             return ""
         return (
-            f"postgresql://{self.postgres_user}"
-            f":{self.postgres_password}"
+            f"postgresql://{quote_plus(self.postgres_user)}"
+            f":{quote_plus(self.postgres_password)}"
             f"@{self.postgres_host}"
             f":{self.postgres_port}"
             f"/{self.postgres_database}"

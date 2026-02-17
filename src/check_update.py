@@ -131,10 +131,7 @@ def run_check_step() -> None:
     if new_date:
         logger.info(f"📅 Nova versão detectada: {new_date}")
 
-        # Atualiza estado persistido
-        state.target_date = new_date
-
-        # Atualiza config runtime
+        # Atualiza config runtime (state.target_date already set in check_updates)
         settings.target_date = new_date
 
     elif state.target_date:
@@ -155,7 +152,6 @@ def run_check_step() -> None:
             f"✅ Versão {state.target_date} já processada completamente. Nada a fazer."
         )
         sys.exit(0)
-
 
 
 if __name__ == "__main__":

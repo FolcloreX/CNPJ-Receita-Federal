@@ -320,10 +320,54 @@ def run_loader() -> None:
         raise
 
     try:
-        backend.create_schema()
+        # Cria as tabelas
+        execute_sql_file(conn, "schema.sql")
 
-        for config_name in PROCESSING_ORDER:
-            process_and_load_file(backend, config_name)
+        all_tables = [
+            "empresas",
+            "estabelecimentos",
+            "socios",
+            "simples",
+            "paises",
+            "municipios",
+            "qualificacoes_socios",
+            "naturezas_juridicas",
+            "cnaes",
+        ]
+
+        if not settings.use_unlogged:
+            logger.info("use_unlogged=False: Tornando tabelas LOGGED antes da carga...")
+            with conn.cursor() as cursor:
+                for tbl in all_tables:
+                    cursor.execute(
+                        sql.SQL("ALTER TABLE {} SET LOGGED;").format(sql.Identifier(tbl))
+                    )
+            conn.commit()
+
+        processing_order = [
+            "paises",
+            "municipios",
+            "qualificacoes",
+            "naturezas",
+            "cnaes",
+            "empresas",
+            "estabelecimentos",
+            "simples",
+            "socios",
+        ]
+
+        # Fluxo principal de processamento dos arquivos CSV para SQL
+        for config_name in processing_order:
+            process_and_load_file(conn, config_name)
+
+        if settings.use_unlogged and settings.set_logged_after_copy:
+            logger.info("Tornando tabelas persistentes (LOGGED) novamente...")
+            with conn.cursor() as cursor:
+                for tbl in all_tables:
+                    cursor.execute(
+                        sql.SQL("ALTER TABLE {} SET LOGGED;").format(sql.Identifier(tbl))
+                    )
+            conn.commit()
 
         backend.post_load()
         logger.info("Carga finalizada com sucesso.")
@@ -344,6 +388,7 @@ def run_constraints() -> None:
     logger.info("Iniciando aplicação de Constraints e Índices...")
     logger.info("É um processo demorado!!!")
 
+    conn = None
     try:
         backend.connect()
         backend.apply_constraints()
