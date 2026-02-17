@@ -380,12 +380,12 @@ def run_loader() -> None:
             "cnaes",
         ]
 
-        if settings.use_unlogged:
-            logger.info("Configurando tabelas como UNLOGGED para carga rápida...")
+        if not settings.use_unlogged:
+            logger.info("use_unlogged=False: Tornando tabelas LOGGED antes da carga...")
             with conn.cursor() as cursor:
                 for tbl in all_tables:
                     cursor.execute(
-                        sql.SQL("ALTER TABLE {} SET UNLOGGED;").format(sql.Identifier(tbl))
+                        sql.SQL("ALTER TABLE {} SET LOGGED;").format(sql.Identifier(tbl))
                     )
             conn.commit()
 
