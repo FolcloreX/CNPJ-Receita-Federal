@@ -4,8 +4,8 @@ from pathlib import Path
 
 from typing import Literal, Dict, Optional
 from enum import Enum
-from pydantic_settings import BaseSettings, SettingsConfigDict, Field
-from pydantic import computed_field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, computed_field
 
 
 def setup_logging():
@@ -48,8 +48,13 @@ class Settings(BaseSettings):
     )
 
     rfb_base_url: str = Field(
-        default="https://arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/",
+        default="https://arquivos.receitafederal.gov.br/public.php/webdav/",
         description="URL Base da Receita Federal onde ficam as pastas por data.",
+    )
+
+    rfb_token: str = Field(
+        default="YggdBLfdninEJX9",
+        description="teste"
     )
 
     target_date: str = Field(
@@ -144,6 +149,7 @@ class Settings(BaseSettings):
         """Monta a URL completa baseada na data alvo."""
         if not self.target_date:
             return ""
+            
         return f"{self.rfb_base_url}{self.target_date}/"
 
     @computed_field
