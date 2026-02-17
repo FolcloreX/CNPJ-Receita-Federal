@@ -1,0 +1,112 @@
+-- ============================================================================
+-- 1. LIMPEZA INICIAL (DROP) | CUIDADO APAGA TUDO
+-- ============================================================================
+DROP TABLE IF EXISTS socios CASCADE;
+DROP TABLE IF EXISTS simples CASCADE;
+DROP TABLE IF EXISTS estabelecimentos CASCADE;
+DROP TABLE IF EXISTS empresas CASCADE;
+DROP TABLE IF EXISTS cnaes CASCADE;
+DROP TABLE IF EXISTS naturezas_juridicas CASCADE;
+DROP TABLE IF EXISTS qualificacoes_socios CASCADE;
+DROP TABLE IF EXISTS municipios CASCADE;
+DROP TABLE IF EXISTS paises CASCADE;
+
+-- ============================================================================
+-- 2. TABELAS DE DOMÍNIO
+-- ============================================================================
+
+CREATE TABLE paises (
+    codigo SMALLINT,
+    nome VARCHAR(100)
+);
+
+CREATE TABLE municipios (
+    codigo SMALLINT,
+    nome VARCHAR(150)
+);
+
+CREATE TABLE qualificacoes_socios (
+    codigo SMALLINT,
+    nome VARCHAR(100)
+);
+
+CREATE TABLE naturezas_juridicas (
+    codigo SMALLINT,
+    nome VARCHAR(150)
+);
+
+CREATE TABLE cnaes (
+    codigo INTEGER,
+    nome VARCHAR(500)
+);
+
+-- ============================================================================
+-- 3. TABELAS PRINCIPAIS
+-- ============================================================================
+
+CREATE TABLE empresas (
+    cnpj_basico VARCHAR(8),
+    razao_social VARCHAR(255),
+    natureza_juridica_codigo SMALLINT,
+    qualificacao_responsavel SMALLINT,
+    capital_social DECIMAL(18, 2),
+    porte_empresa SMALLINT,
+    ente_federativo_responsavel VARCHAR(100)
+);
+
+CREATE TABLE estabelecimentos (
+    cnpj_basico VARCHAR(8),
+    cnpj_ordem VARCHAR(4),
+    cnpj_dv VARCHAR(2),
+    identificador_matriz_filial SMALLINT,
+    nome_fantasia VARCHAR(255),
+    situacao_cadastral SMALLINT,
+    data_situacao_cadastral DATE,
+    motivo_situacao_cadastral SMALLINT,
+    nome_cidade_exterior VARCHAR(100),
+    pais_codigo SMALLINT,
+    data_inicio_atividade DATE,
+    cnae_fiscal_principal_codigo INTEGER,
+    cnae_fiscal_secundaria VARCHAR,        -- Armazenado como texto "{cod1,cod2,...}"
+    tipo_logradouro VARCHAR(50),
+    logradouro VARCHAR(255),
+    numero VARCHAR(20),
+    complemento VARCHAR(255),
+    bairro VARCHAR(100),
+    cep VARCHAR(8),
+    uf VARCHAR(2),
+    municipio_codigo SMALLINT,
+    ddd_1 VARCHAR(4),
+    telefone_1 VARCHAR(9),
+    ddd_2 VARCHAR(4),
+    telefone_2 VARCHAR(9),
+    ddd_fax VARCHAR(4),
+    fax VARCHAR(9),
+    correio_eletronico VARCHAR(255),
+    situacao_especial VARCHAR(100),
+    data_situacao_especial DATE
+);
+
+CREATE TABLE simples (
+    cnpj_basico VARCHAR(8),
+    opcao_pelo_simples VARCHAR(1),
+    data_opcao_pelo_simples DATE,
+    data_exclusao_do_simples DATE,
+    opcao_pelo_mei VARCHAR(1),
+    data_opcao_pelo_mei DATE,
+    data_exclusao_do_mei DATE
+);
+
+CREATE TABLE socios (
+    cnpj_basico VARCHAR(8),
+    identificador_socio SMALLINT,
+    nome_socio_ou_razao_social VARCHAR(255),
+    cnpj_cpf_socio VARCHAR(14),
+    qualificacao_socio_codigo SMALLINT,
+    data_entrada_sociedade DATE,
+    pais_codigo SMALLINT,
+    representante_legal_cpf VARCHAR(11),
+    nome_representante_legal VARCHAR(255),
+    qualificacao_representante_legal_codigo SMALLINT,
+    faixa_etaria SMALLINT
+);

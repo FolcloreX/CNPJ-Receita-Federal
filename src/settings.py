@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal, Dict, Optional
 from enum import Enum
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, model_validator
 
 
 def setup_logging():
@@ -65,12 +65,24 @@ class Settings(BaseSettings):
         ),
     )
 
-    # --- Banco de Dados (Obrigatórios) ---
-    postgres_user: str = Field(description="Usuário do PostgreSQL.")
-    postgres_password: str = Field(description="Senha do PostgreSQL.")
-    postgres_host: str = Field(description="Host do banco (ex: localhost, db).")
+    # --- Motor de Banco de Dados ---
+    db_engine: Literal["postgresql", "duckdb"] = Field(
+        default="postgresql",
+        description="Motor de banco de dados: 'postgresql' ou 'duckdb'.",
+    )
+
+    # --- DuckDB ---
+    duckdb_path: str = Field(
+        default="cnpj_rfb.duckdb",
+        description="Nome do arquivo DuckDB (criado dentro de data_dir).",
+    )
+
+    # --- PostgreSQL (obrigatórios quando db_engine='postgresql') ---
+    postgres_user: Optional[str] = Field(default=None, description="Usuário do PostgreSQL.")
+    postgres_password: Optional[str] = Field(default=None, description="Senha do PostgreSQL.")
+    postgres_host: Optional[str] = Field(default=None, description="Host do banco (ex: localhost, db).")
     postgres_port: int = Field(default=5432, description="Porta do banco.")
-    postgres_database: str = Field(description="Nome do banco de dados.")
+    postgres_database: Optional[str] = Field(default=None, description="Nome do banco de dados.")
 
     # --- Performance de Download/Extração ---
     max_workers: int = Field(
@@ -144,6 +156,24 @@ class Settings(BaseSettings):
         default="INFO", description="Nível de detalhe dos logs."
     )
 
+    @model_validator(mode="after")
+    def validate_db_config(self):
+        if self.db_engine == "postgresql":
+            missing = []
+            if not self.postgres_user:
+                missing.append("POSTGRES_USER")
+            if not self.postgres_password:
+                missing.append("POSTGRES_PASSWORD")
+            if not self.postgres_host:
+                missing.append("POSTGRES_HOST")
+            if not self.postgres_database:
+                missing.append("POSTGRES_DATABASE")
+            if missing:
+                raise ValueError(
+                    f"Campos obrigatórios para PostgreSQL não definidos: {', '.join(missing)}"
+                )
+        return self
+
     @computed_field
     def download_url(self) -> str:
         """Monta a URL completa baseada na data alvo."""
@@ -173,7 +203,13 @@ class Settings(BaseSettings):
         return self.project_root / "queries"
 
     @computed_field
+    def duckdb_file(self) -> Path:
+        return self.data_dir / self.duckdb_path
+
+    @computed_field
     def database_uri(self) -> str:
+        if self.db_engine != "postgresql":
+            return ""
         return (
             f"postgresql://{self.postgres_user}"
             f":{self.postgres_password}"

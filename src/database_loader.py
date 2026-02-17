@@ -1,59 +1,11 @@
 import pandas as pd
 import logging
-import io
 import re
-import psycopg2
-from psycopg2 import sql
-from pathlib import Path
 from .settings import settings
 
 logger = logging.getLogger(__name__)
 
-# --- Funções de Carga e Limpeza ---
-
-
-def fast_load_chunk(conn, df, table_name):
-    """
-    Função de Carga Ultra-Rápida (PostgreSQL COPY).
-    Recebe a conexão direta do psycopg2 (conn).
-    """
-    output = io.StringIO()
-
-    # Prepara o CSV em memória
-    df.to_csv(
-        output,
-        sep=";",
-        header=False,
-        index=False,
-        na_rep="",
-        quotechar='"',
-        doublequote=True,
-    )
-    output.seek(0)
-
-    columns = df.columns.tolist()
-
-    # Usa um cursor para executar o COPY
-    try:
-        with conn.cursor() as cursor:
-            ident_cols = [sql.Identifier(c) for c in columns]
-            copy_stmt = sql.SQL(
-                "COPY {table} ({cols}) FROM STDIN WITH (FORMAT CSV, DELIMITER ';', NULL '', QUOTE '\"', HEADER FALSE)"
-            ).format(
-                table=sql.Identifier(table_name),
-                cols=sql.SQL(", ").join(ident_cols),
-            )
-            cursor.copy_expert(copy_stmt.as_string(conn), output)
-
-        # O commit é feito no nível superior (loop de processamento)
-        # para evitar commit a cada chunk pequeno se desejar,
-        # mas aqui faremos commit por chunk para liberar memória do PG.
-        conn.commit()
-
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"Erro no COPY para tabela {table_name}: {e}")
-        raise
+# --- Funções de Limpeza (compartilhadas entre backends) ---
 
 
 def sanitize_dates(df, date_columns):
@@ -111,10 +63,10 @@ def clean_simples_chunk(chunk_df):
     )
 
 
+# --- Configuração ETL (compartilhada entre backends) ---
+
 ETL_CONFIG = {
     # --- Tabelas de Domínio ---
-    # Tipar essas tabelas evita que códigos "01" virem "1" se forem lidos como int,
-    # ou garante performance se forem int. Aqui assumimos int para códigos.
     "paises": {
         "table_name": "paises",
         "column_names": ["codigo", "nome"],
@@ -204,16 +156,16 @@ ETL_CONFIG = {
             "identificador_matriz_filial": pd.Int64Dtype(),
             "nome_fantasia": str,
             "situacao_cadastral": pd.Int64Dtype(),
-            "data_situacao_cadastral": str,  # Data como str para limpeza posterior
+            "data_situacao_cadastral": str,
             "motivo_situacao_cadastral": pd.Int64Dtype(),
             "nome_cidade_exterior": str,
             "pais_codigo": pd.Int64Dtype(),
-            "data_inicio_atividade": str,  # Data como str
+            "data_inicio_atividade": str,
             "cnae_fiscal_principal_codigo": pd.Int64Dtype(),
-            "cnae_fiscal_secundaria": str,  # Lista vem como texto
+            "cnae_fiscal_secundaria": str,
             "tipo_logradouro": str,
             "logradouro": str,
-            "numero": str,  # Número pode ter letras "S/N", "KM 30"
+            "numero": str,
             "complemento": str,
             "bairro": str,
             "cep": str,
@@ -227,7 +179,7 @@ ETL_CONFIG = {
             "fax": str,
             "correio_eletronico": str,
             "situacao_especial": str,
-            "data_situacao_especial": str,  # Data como str
+            "data_situacao_especial": str,
         },
         "custom_clean_func": clean_estabelecimentos_chunk,
     },
@@ -252,7 +204,7 @@ ETL_CONFIG = {
             "nome_socio_ou_razao_social": str,
             "cnpj_cpf_socio": str,
             "qualificacao_socio_codigo": pd.Int64Dtype(),
-            "data_entrada_sociedade": str,  # Data como str
+            "data_entrada_sociedade": str,
             "pais_codigo": pd.Int64Dtype(),
             "representante_legal_cpf": str,
             "nome_representante_legal": str,
@@ -285,10 +237,37 @@ ETL_CONFIG = {
     },
 }
 
-# --- Processador ---
+PROCESSING_ORDER = [
+    "paises",
+    "municipios",
+    "qualificacoes",
+    "naturezas",
+    "cnaes",
+    "empresas",
+    "estabelecimentos",
+    "simples",
+    "socios",
+]
+
+# --- Backend Factory ---
 
 
-def process_and_load_file(conn, config_name) -> None:
+def _get_backend():
+    """Retorna o backend correto baseado na configuração db_engine."""
+    if settings.db_engine == "duckdb":
+        from .duckdb_loader import DuckDBBackend
+
+        return DuckDBBackend()
+    else:
+        from .postgres_loader import PostgresBackend
+
+        return PostgresBackend()
+
+
+# --- Processador (compartilhado) ---
+
+
+def process_and_load_file(backend, config_name) -> None:
     try:
         etl_config = ETL_CONFIG[config_name]
     except KeyError:
@@ -319,8 +298,7 @@ def process_and_load_file(conn, config_name) -> None:
         if "custom_clean_func" in etl_config:
             chunk = etl_config["custom_clean_func"](chunk)
 
-        # Passa a conexão direta
-        fast_load_chunk(conn, chunk, table_name)
+        backend.load_chunk(chunk, table_name)
 
         total_rows += len(chunk)
         logger.info(f"  ... Chunk {i + 1} processado. Total: {total_rows} linhas.")
@@ -328,117 +306,53 @@ def process_and_load_file(conn, config_name) -> None:
     logger.info(f"--- Tabela '{table_name}' finalizada! ---")
 
 
-def execute_sql_file(conn, filename) -> None:
-    """
-    Lê e executa um arquivo SQL usando cursor do psycopg2.
-    """
-    base_path = Path(__file__).parent
-    file_path = base_path / filename
-
-    if not file_path.exists():
-        logger.error(f"Arquivo SQL não encontrado: {file_path}")
-        return
-
-    logger.info(f"Executando SQL: {filename}")
-    with open(file_path, "r", encoding="utf-8") as f:
-        sql_content = f.read()
-
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute(sql_content)
-        conn.commit()  # Confirma as alterações do DDL
-        logger.info(f"Sucesso ao executar {filename}")
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"ERRO ao executar SQL de {filename}: {e}")
-        raise
+# --- Orquestração ---
 
 
 def run_loader() -> None:
-    logger.info("🚀 Iniciando carga para PostgreSQL (Driver Nativo)...")
+    backend = _get_backend()
+    logger.info(f"Iniciando carga para {settings.db_engine.upper()}...")
 
-    # Conexão direta via psycopg2
     try:
-        conn = psycopg2.connect(settings.database_uri)
+        backend.connect()
     except Exception as e:
         logger.error(f"Erro ao conectar no banco: {e}")
         raise
 
     try:
-        # Cria as tabelas
-        execute_sql_file(conn, "schema.sql")
+        backend.create_schema()
 
-        processing_order = [
-            "paises",
-            "municipios",
-            "qualificacoes",
-            "naturezas",
-            "cnaes",
-            "empresas",
-            "estabelecimentos",
-            "simples",
-            "socios",
-        ]
+        for config_name in PROCESSING_ORDER:
+            process_and_load_file(backend, config_name)
 
-        # Fluxo principal de processamento dos arquivos CSV para SQL
-        for config_name in processing_order:
-            process_and_load_file(conn, config_name)
-
-        if settings.set_logged_after_copy:
-            logger.info("Tornando tabelas persistentes (LOGGED) novamente...")
-
-            tables = [
-                "empresas",
-                "estabelecimentos",
-                "socios",
-                "simples",
-                "paises",
-                "municipios",
-                "qualificacoes_socios",
-                "naturezas_juridicas",
-                "cnaes",
-            ]
-
-            with conn.cursor() as cursor:
-                for tbl in tables:
-                    cursor.execute(f"ALTER TABLE {tbl} SET LOGGED;")
-            conn.commit()
-
+        backend.post_load()
         logger.info("Carga finalizada com sucesso.")
 
     except Exception as e:
         logger.error(f"Erro crítico durante o processo: {e}")
-        conn.rollback()
         raise
     finally:
-        conn.close()
+        backend.close()
 
 
 def run_constraints() -> None:
     if settings.skip_constraints:
-        logger.info("⏭️  [SKIP OPCIONAL] CONSTRAINTS definido pelo usuário")
+        logger.info("  [SKIP OPCIONAL] CONSTRAINTS definido pelo usuário")
         return
 
-    logger.info("🔒 Iniciando aplicação de Constraints e Índices...")
+    backend = _get_backend()
+    logger.info("Iniciando aplicação de Constraints e Índices...")
     logger.info("É um processo demorado!!!")
 
     try:
-        conn = psycopg2.connect(settings.database_uri)
-
-        # Como isso demora, aumentar o timeout da sessão se necessário,
-        # mas índices geralmente rodam bem na conexão padrão.
-        execute_sql_file(conn, "constraints.sql")
-
-        logger.info("✅ Constraints e Índices aplicados com sucesso.")
-
+        backend.connect()
+        backend.apply_constraints()
+        logger.info("Constraints e Índices aplicados com sucesso.")
     except Exception as e:
-        logger.error(f"❌ Erro ao aplicar constraints: {e}")
-        if conn:
-            conn.rollback()
+        logger.error(f"Erro ao aplicar constraints: {e}")
         raise
     finally:
-        if conn:
-            conn.close()
+        backend.close()
 
 
 if __name__ == "__main__":
