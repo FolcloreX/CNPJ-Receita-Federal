@@ -10,10 +10,16 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cnpj}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   app:
     build: .
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       postgres_user: ${POSTGRES_USER:-cnpj}
       postgres_password: ${POSTGRES_PASSWORD:-cnpj}
@@ -23,6 +29,6 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-    command: ["python","main.py","full"]
+    command: ["python", "main.py"]
 volumes:
   pgdata:

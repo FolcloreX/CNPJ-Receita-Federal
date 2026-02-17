@@ -368,6 +368,27 @@ def run_loader() -> None:
         # Cria as tabelas
         execute_sql_file(conn, "schema.sql")
 
+        all_tables = [
+            "empresas",
+            "estabelecimentos",
+            "socios",
+            "simples",
+            "paises",
+            "municipios",
+            "qualificacoes_socios",
+            "naturezas_juridicas",
+            "cnaes",
+        ]
+
+        if settings.use_unlogged:
+            logger.info("Configurando tabelas como UNLOGGED para carga rápida...")
+            with conn.cursor() as cursor:
+                for tbl in all_tables:
+                    cursor.execute(
+                        sql.SQL("ALTER TABLE {} SET UNLOGGED;").format(sql.Identifier(tbl))
+                    )
+            conn.commit()
+
         processing_order = [
             "paises",
             "municipios",
@@ -384,24 +405,13 @@ def run_loader() -> None:
         for config_name in processing_order:
             process_and_load_file(conn, config_name)
 
-        if settings.set_logged_after_copy:
+        if settings.use_unlogged and settings.set_logged_after_copy:
             logger.info("Tornando tabelas persistentes (LOGGED) novamente...")
-
-            tables = [
-                "empresas",
-                "estabelecimentos",
-                "socios",
-                "simples",
-                "paises",
-                "municipios",
-                "qualificacoes_socios",
-                "naturezas_juridicas",
-                "cnaes",
-            ]
-
             with conn.cursor() as cursor:
-                for tbl in tables:
-                    cursor.execute(f"ALTER TABLE {tbl} SET LOGGED;")
+                for tbl in all_tables:
+                    cursor.execute(
+                        sql.SQL("ALTER TABLE {} SET LOGGED;").format(sql.Identifier(tbl))
+                    )
             conn.commit()
 
         logger.info("Carga finalizada com sucesso.")
@@ -422,6 +432,7 @@ def run_constraints() -> None:
     logger.info("🔒 Iniciando aplicação de Constraints e Índices...")
     logger.info("É um processo demorado!!!")
 
+    conn = None
     try:
         conn = psycopg2.connect(settings.database_uri)
 

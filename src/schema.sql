@@ -12,40 +12,40 @@ DROP TABLE IF EXISTS municipios CASCADE;
 DROP TABLE IF EXISTS paises CASCADE;
 
 -- ============================================================================
--- 2. TABELAS DE DOMÍNIO (UNLOGGED para carga rápida) SEM PK SEM FK 
+-- 2. TABELAS DE DOMÍNIO (SEM PK SEM FK - adicionadas após carga)
+-- Nota: Se use_unlogged=True, o loader altera para UNLOGGED antes da carga.
 -- ============================================================================
 
-CREATE UNLOGGED TABLE paises (
+CREATE TABLE paises (
     codigo SMALLINT, -- Max 999
     nome VARCHAR(100)
 );
 
-CREATE UNLOGGED TABLE municipios (
+CREATE TABLE municipios (
     codigo SMALLINT, -- Código SIAFI (4 dígitos)
     nome VARCHAR(150)
 );
 
-CREATE UNLOGGED TABLE qualificacoes_socios (
+CREATE TABLE qualificacoes_socios (
     codigo SMALLINT,
     nome VARCHAR(100)
 );
 
-CREATE UNLOGGED TABLE naturezas_juridicas (
+CREATE TABLE naturezas_juridicas (
     codigo SMALLINT,
     nome VARCHAR(150)
 );
 
-CREATE UNLOGGED TABLE cnaes (
+CREATE TABLE cnaes (
     codigo INTEGER, -- 7 dígitos (ex: 4711302), precisa ser INTEGER
     nome VARCHAR(500) -- Algumas descrições são longas
-  
 );
 
 -- ============================================================================
--- 3. TABELAS PRINCIPAIS (UNLOGGED)
+-- 3. TABELAS PRINCIPAIS
 -- ============================================================================
 
-CREATE UNLOGGED TABLE empresas (
+CREATE TABLE empresas (
     cnpj_basico CHAR(8),
     razao_social VARCHAR(255),
     natureza_juridica_codigo SMALLINT,
@@ -55,7 +55,7 @@ CREATE UNLOGGED TABLE empresas (
     ente_federativo_responsavel VARCHAR(100)
 );
 
-CREATE UNLOGGED TABLE estabelecimentos (
+CREATE TABLE estabelecimentos (
     cnpj_basico CHAR(8),
     cnpj_ordem CHAR(4),
     cnpj_dv CHAR(2),
@@ -88,7 +88,7 @@ CREATE UNLOGGED TABLE estabelecimentos (
     data_situacao_especial DATE
 );
 
-CREATE UNLOGGED TABLE simples (
+CREATE TABLE simples (
     cnpj_basico CHAR(8),
     opcao_pelo_simples CHAR(1),
     data_opcao_pelo_simples DATE,
@@ -98,7 +98,7 @@ CREATE UNLOGGED TABLE simples (
     data_exclusao_do_mei DATE
 );
 
-CREATE UNLOGGED TABLE socios (
+CREATE TABLE socios (
     cnpj_basico CHAR(8),
     identificador_socio SMALLINT, -- 1, 2 ou 3
     nome_socio_ou_razao_social VARCHAR(255),

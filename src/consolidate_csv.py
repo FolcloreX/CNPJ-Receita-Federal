@@ -21,7 +21,10 @@ def get_source_csv_files(directory: Path, output_filename: str) -> List[Path]:
     Encontra todos os arquivos .csv (ou .CSV), ignorando o arquivo de saída.
     """
     all_files = directory.glob("*")
-    return [f for f in all_files if f.name != output_filename]
+    return sorted(
+        [f for f in all_files if f.is_file() and f.name != output_filename],
+        key=lambda f: f.name,
+    )
 
 
 def concatenate_files_in_directory(dir_path: Path):
